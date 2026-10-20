@@ -37,13 +37,39 @@ document.addEventListener('alpine:init', () => {
     },
 
     // Fetch Products from Supabase using exact schema columns
-    async fetchProducts() {
+   /* async fetchProducts() {
       this.loading = true;
       this.errorMessage = '';
       try {
         const { data, error } = await supabaseClient
           .from('products')
           .select('id, name, short_description, unit_price, image_url, category, created_at')
+          .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        
+        this.products = data || [];
+        
+        const cats = new Set(this.products.map(p => p.category).filter(Boolean));
+        this.categories = ['All', ...Array.from(cats)];
+      } catch (err) {
+        console.error('Error fetching products:', err);
+        this.errorMessage = 'Could not load products. Please check configuration.';
+        this.products = [];
+      } finally {
+        this.loading = false;
+      }
+    },*/
+
+    // Fetch Products from Supabase using exact schema columns + is_visible filter
+    async fetchProducts() {
+      this.loading = true;
+      this.errorMessage = '';
+      try {
+        const { data, error } = await supabaseClient
+          .from('products')
+          .select('id, name, short_description, unit_price, image_url, category, is_visible, created_at')
+          .eq('is_visible', true) // <-- MOSTRA SOLO I PRODOTTI VISIBILI
           .order('created_at', { ascending: false });
 
         if (error) throw error;
