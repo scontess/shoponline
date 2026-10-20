@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Dashboard - Shop Online</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Supabase JS Client -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- Alpine.js CDN -->
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+</head>
+<body class="bg-gray-100 font-sans antialiased" x-data="adminApp()" x-init="init()">
+
+  <!-- Top Navigation Bar -->
+  <header class="bg-slate-900 text-white shadow-md">
+    <div class="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
+      <h1 class="text-xl font-bold flex items-center gap-2">
+        <span>⚙️</span> Dashboard Gestionale
+      </h1>
+      <nav class="flex space-x-4">
+        <button 
+          @click="activeTab = 'orders'" 
+          :class="activeTab === 'orders' ? 'bg-blue-600 text-white' : 'text-gray-300 hover:text-white'"
+          class="px-4 py-2 rounded-lg text-sm font-medium transition">
+          📦 Ordini & Spedizioni
+        </button>
+        <button 
+          @click="activeTab = 'products'" 
+          :class="activeTab === 'products' ? 'bg-blue-600 text-white' : 'text-gray-300 hover:text-white'"
+          class="px-4 py-2 rounded-lg text-sm font-medium transition">
+          🏷️ Catalogo Prodotti
+        </button>
+      </nav>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-4 py-8">
+
+    <!-- TAB 1: GESTIONE ORDINI, SPEDIZIONI E FATTURAZIONE -->
+    <div x-show="activeTab === 'orders'" x-cloak>
+      <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+        <div>
+          <h2 class="text-2xl font-bold text-gray-800">Ordini Ricevuti</h2>
+          <p class="text-xs text-gray-500 mt-1" x-text="'Visualizzati ' + filteredOrders.length + ' ordini su ' + orders.length"></p>
+        </div>
+        <div class="flex justify-end gap-2 my-4">
+            <!-- Bottone Aggiorna -->
+            <button @click="fetchOrders()" class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 py-1.5 rounded-md text-sm font-medium transition flex items-center gap-1">
+              🔄 Aggiorna
+            </button>
+
+            <!-- Bottone Esci / Logout -->
+            <button id="logoutBtn" class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 py-1.5 rounded-md text-sm font-medium transition flex items-center gap-1">
+              🚪 Logout
+            </button>
+        </div>
+      </div>
+
+      <!-- BARRA FILTRI -->
+      <div class="bg-white p-4 rounded-xl shadow mb-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1">🔍 Cerca Cliente / ID</label>
+          <input 
+            type="text" 
+            x-model="filters.search" 
+            placeholder="Email o ID ordine..." 
+            class="w-full border rounded-lg p-2 text-xs focus:ring-2 focus:ring-blue-500 outline-none">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1">💳 Stato Pagamento</label>
+          <select x-model="filters.paymentStatus" class="w-full border rounded-lg p-2 text-xs focus:ring-2 focus:ring-blue-500 outline-none bg-white">
+            <option value="all">Tutti gli stati</option>
+            <option value="paid">✅ Pagato (PAID)</option>
+            <option value="pending">⏳ In Attesa (PENDING)</option>
+            <option value="failed">❌ Fallito (FAILED)</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1">🚚 Spedizione</label>
+          <select x-model="filters.shippingStatus" class="w-full border rounded-lg p-2 text-xs focus:ring-2 focus:ring-blue-500 outline-none bg-white">
+            <option value="all">Tutte le spedizioni</option>
+            <option value="pending">⏳ In Lavorazione</option>
+            <option value="shipped">🚚 Spedito</option>
+            <option value="delivered">✅ Consegnato</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1">📄 Fatturazione</label>
+          <select x-model="filters.invoiced" class="w-full border rounded-lg p-2 text-xs focus:ring-2 focus:ring-blue-500 outline-none bg-white">
+            <option value="all">Tutti</option>
+            <option value="invoiced">Fatturati</option>
+            <option value="not_invoiced">Da Fatturare</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- TABELLA ORDINI -->
+      <div class="bg-white rounded-xl shadow overflow-x-auto">
+        <table class="w-full text-left border-collapse">
+          <thead>
+            <tr class="bg-gray-50 border-b border-gray-200 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+              <th class="p-4">ID Ordine / Data</th>
+              <th class="p-4">Cliente (Email & Spedizione)</th>
+              <th class="p-4">Articoli Acquistati</th>
+              <th class="p-4" style="min-width: 120px;">Totale</th>
+              <th class="p-4">Stato Pagamento</th>
+              <th class="p-4">Spedizione</th>
+              <th class="p-4">Fatturazione</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-200 text-sm">
+            <template x-for="order in filteredOrders" :key="order.id">
+              <tr class="hover:bg-gray-50 align-top">
+                <td class="p-4">
+                  <div class="flex items-center gap-1.5">
+                    <span class="font-mono text-xs font-bold text-gray-900" x-text="order.id.substring(0, 8) + '...'"></span>
+                    <button 
+                      @click="copyToClipboard(order.id)" 
+                      title="Copia ID Ordine completo"
+                      class="text-gray-400 hover:text-blue-600 p-1 rounded transition text-xs">
+                      📋
+                    </button>
+                  </div>
+                  <div class="text-xs text-gray-500 mt-1" x-text="formatDate(order.created_at)"></div>
+                </td>
+                
+                <!-- CLIENTE, EMAIL, INDIRIZZO E TELEFONO -->
+             <td class="p-4">
+                      <!-- Email del cliente -->
+                      <div class="bg-indigo-100 text-indigo-900 border border-indigo-200 font-semibold text-xs px-2.5 py-1.5 rounded-md break-all mb-2 shadow-sm flex items-center gap-1.5">
+                        <span>✉️</span>
+                        <span x-text="order.buyers?.email || 'N/D'"></span>
+                      </div>
+                      
+                      <!-- Riquadro Spedizione -->
+                      <div class="text-xs bg-gray-50 p-2 rounded border border-gray-200 mb-1.5" x-show="order.shipping_address">
+                        <span class="font-bold text-gray-700">📍 Spedire a:</span><br>
+                        <span class="text-gray-800" x-text="order.shipping_address"></span>
+                      </div>
+
+                      <!-- Riquadro Telefono -->
+                      <div class="text-xs bg-gray-50 p-2 rounded border border-gray-200" x-show="order.customer_phone">
+                        <span class="font-bold text-gray-700">📞 Telefono:</span> 
+                        <span class="text-gray-800" x-text="order.customer_phone"></span>
+                      </div>
+                </td>
+
+                <td class="p-4">
+                  <div class="space-y-1">
+                    <template x-for="item in order.order_items" :key="item.id">
+                      <div class="text-xs bg-gray-50 p-1.5 rounded border border-gray-100">
+                        <span class="font-semibold text-gray-800" x-text="item.products?.name || 'Prodotto eliminato'"></span> 
+                        <span class="text-gray-500" x-text="'(x' + item.quantity + ')'"></span>
+                      </div>
+                    </template>
+                    <template x-if="!order.order_items || order.order_items.length === 0">
+                      <span class="text-xs text-gray-400">Nessun dettaglio articolo</span>
+                    </template>
+                  </div>
+                </td>
+                <td class="p-4 font-semibold text-gray-900" x-text="'€ ' + Number(order.total_amount).toFixed(2)"></td>
+                <td class="p-4">
+                  <span 
+                    class="px-2.5 py-1 rounded-full text-xs font-semibold"
+                    :class="{
+                      'bg-green-100 text-green-800': order.status === 'paid',
+                      'bg-yellow-100 text-yellow-800': order.status === 'pending',
+                      'bg-red-100 text-red-800': order.status === 'failed'
+                    }"
+                    x-text="(order.status || 'PENDING').toUpperCase()">
+                  </span>
+                </td>
+                <td class="p-4">
+                  <div class="space-y-1">
+                    <select 
+                      x-model="order.shipping_status" 
+                      @change="updateShipping(order)"
+                      class="text-xs border rounded p-1 font-medium bg-white w-full">
+                      <option value="pending">⏳ In Lavorazione</option>
+                      <option value="shipped">🚚 Spedito</option>
+                      <option value="delivered">✅ Consegnato</option>
+                    </select>
+                    <input 
+                      type="text" 
+                      placeholder="Codice Tracking..." 
+                      x-model="order.tracking_code"
+                      @blur="updateShipping(order)"
+                      class="text-xs border rounded p-1 w-full text-gray-600">
+                  </div>
+                </td>
+                <td class="p-4">
+                  <div class="space-y-1">
+                    <label class="inline-flex items-center gap-1.5 cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        x-model="order.invoiced" 
+                        @change="updateInvoice(order)"
+                        class="rounded text-blue-600 focus:ring-blue-500">
+                      <span class="text-xs font-medium" x-text="order.invoiced ? 'Fatturato' : 'Da Fatturare'"></span>
+                    </label>
+                    <input 
+                      type="text" 
+                      placeholder="N° Fattura (es. 2026/01)..." 
+                      x-model="order.invoice_number"
+                      @blur="updateInvoice(order)"
+                      class="text-xs border rounded p-1 w-full text-gray-600">
+                  </div>
+                </td>
+              </tr>
+            </template>
+            <template x-if="filteredOrders.length === 0">
+              <tr>
+                <td colspan="7" class="p-8 text-center text-gray-500">Nessun ordine corrisponde ai filtri selezionati.</td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- TAB 2: NUOVO PRODOTTO & CARICAMENTO IMMAGINI -->
+    <div x-show="activeTab === 'products'" x-cloak class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      
+      <!-- Form Inserimento/Modifica Prodotto -->
+      <div class="lg:col-span-1 bg-white p-6 rounded-xl shadow h-fit">
+        <h3 class="text-lg font-bold text-gray-800 mb-4" x-text="editingProduct ? 'Modifica Prodotto' : 'Nuovo Prodotto'"></h3>
+        <form @submit.prevent="saveProduct()" class="space-y-4">
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1">Nome Prodotto *</label>
+            <input type="text" x-model="productForm.name" required class="w-full border rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1">Categoria *</label>
+            <input type="text" x-model="productForm.category" required placeholder="Es. Elettronica, Abbigliamento..." class="w-full border rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1">Prezzo (€) *</label>
+            <input type="number" step="0.01" x-model="productForm.unit_price" required class="w-full border rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1">Descrizione Breve</label>
+            <input type="text" x-model="productForm.short_description" class="w-full border rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1">Descrizione Estesa</label>
+            <textarea x-model="productForm.long_description" rows="3" class="w-full border rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"></textarea>
+          </div>
+
+          <!-- Checkbox Visibilità -->
+          <div class="flex items-center gap-2 pt-1">
+            <input 
+              type="checkbox" 
+              id="is_visible" 
+              x-model="productForm.is_visible" 
+              class="w-4 h-4 text-blue-600 rounded focus:ring-blue-500 cursor-pointer">
+            <label for="is_visible" class="text-xs font-semibold text-gray-700 cursor-pointer select-none">
+              Visibile sullo Shop
+            </label>
+          </div>
+
+          <!-- Selezione o Upload Immagine -->
+          <div class="border-t pt-4">
+            <label class="block text-xs font-semibold text-gray-600 mb-2">Immagine Prodotto</label>
+            
+            <div class="mb-3">
+              <label class="block text-xs text-gray-500 mb-1">Carica Nuova Foto su Supabase Storage:</label>
+              <input type="file" @change="uploadImage($event)" accept="image/*" class="w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+            </div>
+
+            <div class="mb-2">
+              <label class="block text-xs text-gray-500 mb-1">Oppure seleziona una foto esistente:</label>
+              <select x-model="productForm.image_url" class="w-full border rounded-lg p-2 text-xs">
+                <option value="">-- Nessuna Immagine --</option>
+                <template x-for="img in storageImages" :key="img.url">
+                  <option :value="img.url" x-text="img.name"></option>
+                </template>
+              </select>
+            </div>
+
+            <!-- Anteprima immagine -->
+            <template x-if="productForm.image_url">
+              <div class="mt-2 text-center">
+                <img :src="productForm.image_url" class="h-24 w-24 object-cover rounded-lg mx-auto border">
+              </div>
+            </template>
+          </div>
+
+          <div class="flex gap-2 pt-2">
+            <button type="submit" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded-lg text-sm transition">
+              <span x-text="editingProduct ? 'Aggiorna Prodotto' : 'Salva Prodotto'"></span>
+            </button>
+            <button type="button" x-show="editingProduct" @click="resetForm()" class="bg-gray-300 hover:bg-gray-400 text-gray-700 px-3 py-2 rounded-lg text-sm">
+              Annulla
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Elenco Prodotti Esistenti -->
+      <div class="lg:col-span-2 bg-white p-6 rounded-xl shadow">
+        <h3 class="text-lg font-bold text-gray-800 mb-4">Prodotti a Catalogo</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <template x-for="p in products" :key="p.id">
+            <div class="border rounded-lg p-4 flex gap-4 items-center hover:shadow-md transition relative bg-white" :class="{'opacity-75 bg-gray-50': !p.is_visible}">
+              <img :src="p.image_url || 'https://via.placeholder.com/150'" class="w-16 h-16 object-cover rounded-md bg-gray-100">
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2">
+                  <h4 class="font-bold text-gray-900 truncate" x-text="p.name"></h4>
+                  <!-- Badge Stato Visibilità -->
+                  <span 
+                    class="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider"
+                    :class="p.is_visible ? 'bg-green-100 text-green-800' : 'bg-gray-200 text-gray-600'">
+                    <span x-text="p.is_visible ? 'Visibile' : 'Nascosto'"></span>
+                  </span>
+                </div>
+                <p class="text-xs text-gray-500" x-text="p.category"></p>
+                <p class="text-sm font-semibold text-blue-600 mt-1" x-text="'€ ' + Number(p.unit_price).toFixed(2)"></p>
+              </div>
+              <div class="flex flex-col gap-1">
+                <button @click="editProduct(p)" class="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-2 py-1 rounded transition">✏️ Modifica</button>
+                <button @click="toggleVisibility(p)" class="text-xs bg-blue-50 hover:bg-blue-100 text-blue-700 px-2 py-1 rounded transition" x-text="p.is_visible ? '🙈 Nascondi' : '👁️ Mostra'"></button>
+                <button @click="deleteProduct(p.id)" class="text-xs bg-red-50 hover:bg-red-100 text-red-600 px-2 py-1 rounded transition">🗑️ Elimina</button>
+              </div>
+            </div>
+          </template>
+        </div>
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- Script JavaScript -->
+  <script>
+    const SUPABASE_URL_ADMIN = 'https://jjtchtdqeyigqthckwrk.supabase.co';
+    const SUPABASE_ANON_KEY_ADMIN = 'sb_publishable_LHu-ACylxwJ58UhGyuFpOA_GCBcw4Ri'; // <-- Inserisci qui la tua anon key
+
+    const supabaseAdminClient = window.supabase.createClient(SUPABASE_URL_ADMIN, SUPABASE_ANON_KEY_ADMIN);
+
+async function checkAuthAndLoadData() {
+  const { data: { session } } = await supabaseAdminClient.auth.getSession();
+  
+  if (!session) {
+    // Se non c'è una sessione attiva, reindirizza al login
+    window.location.replace('login.html');
+    return;
+  }
+
+  // Se l'utente è autenticato, carica i dati della dashboard
+  loadOrders();
+}
+
+// ⚠️ QUESTO È IL PASSAGGIO FONDAMENTALE: 
+// Devi chiamare la funzione affinché venga eseguita all'apertura della pagina!
+checkAuthAndLoadData();
+
+// Pulsante Logout
+async function logout() {
+  await supabase.auth.signOut();
+  window.location.href = 'login.html';
+}
+
+checkAuthAndLoadData();
+
+
+    function adminApp() {
+      return {
+        activeTab: 'orders',
+        orders: [],
+        products: [],
+        storageImages: [],
+        editingProduct: null,
+        
+        filters: {
+          search: '',
+          paymentStatus: 'all',
+          shippingStatus: 'all',
+          invoiced: 'all'
+        },
+
+        productForm: {
+          id: null,
+          name: '',
+          slug: '',
+          category: '',
+          unit_price: 0,
+          is_visible: true,
+          short_description: '',
+          long_description: '',
+          image_url: ''
+        },
+
+        async init() {
+          await this.fetchOrders();
+          await this.fetchProducts();
+          await this.fetchStorageImages();
+        },
+
+        copyToClipboard(text) {
+          navigator.clipboard.writeText(text).then(() => {
+            alert('ID Ordine copiato negli appunti!\n' + text);
+          }).catch(err => {
+            console.error('Errore durante la copia:', err);
+          });
+        },
+
+        get filteredOrders() {
+          return this.orders.filter(order => {
+            const searchLower = this.filters.search.toLowerCase().trim();
+            const emailMatch = order.buyers?.email?.toLowerCase().includes(searchLower);
+            const idMatch = order.id?.toLowerCase().includes(searchLower);
+            const matchesSearch = !searchLower || emailMatch || idMatch;
+
+            const matchesPayment = this.filters.paymentStatus === 'all' || 
+              (order.status || 'pending').toLowerCase() === this.filters.paymentStatus;
+
+            const matchesShipping = this.filters.shippingStatus === 'all' || 
+              (order.shipping_status || 'pending').toLowerCase() === this.filters.shippingStatus;
+
+            let matchesInvoice = true;
+            if (this.filters.invoiced === 'invoiced') matchesInvoice = order.invoiced === true;
+            if (this.filters.invoiced === 'not_invoiced') matchesInvoice = !order.invoiced;
+
+            return matchesSearch && matchesPayment && matchesShipping && matchesInvoice;
+          });
+        },
+
+        async fetchOrders() {
+          const { data, error } = await supabaseAdminClient
+            .from('orders')
+            .select(`
+              *,
+              buyers ( email ),
+              order_items (
+                id,
+                quantity,
+                unit_price,
+                products ( name )
+              )
+            `)
+            .order('created_at', { ascending: false });
+
+          if (error) {
+            console.error('Errore caricamento ordini:', error);
+          } else {
+            this.orders = data;
+          }
+        },
+
+        async updateShipping(order) {
+          await supabaseAdminClient
+            .from('orders')
+            .update({
+              shipping_status: order.shipping_status,
+              tracking_code: order.tracking_code
+            })
+            .eq('id', order.id);
+        },
+
+        async updateInvoice(order) {
+          await supabaseAdminClient
+            .from('orders')
+            .update({
+              invoiced: order.invoiced,
+              invoice_number: order.invoice_number
+            })
+            .eq('id', order.id);
+        },
+
+        formatDate(dateString) {
+          return new Date(dateString).toLocaleDateString('it-IT', {
+            day: '2-digit', month: '2-digit', year: 'numeric',
+            hour: '2-digit', minute: '2-digit'
+          });
+        },
+
+        async fetchProducts() {
+          const { data, error } = await supabaseAdminClient
+            .from('products')
+            .select('*')
+            .order('created_at', { ascending: false });
+
+          if (!error) this.products = data;
+        },
+
+        async fetchStorageImages() {
+          const { data, error } = await supabaseAdminClient
+            .storage
+            .from('product-images')
+            .list();
+
+          if (!error && data) {
+            this.storageImages = data.map(file => {
+              const { data: publicUrlData } = supabaseAdminClient
+                .storage
+                .from('product-images')
+                .getPublicUrl(file.name);
+                
+              return { name: file.name, url: publicUrlData.publicUrl };
+            });
+          }
+        },
+
+        async uploadImage(event) {
+          const file = event.target.files[0];
+          if (!file) return;
+
+          const fileExt = file.name.split('.').pop();
+          const fileName = `${Date.now()}.${fileExt}`;
+
+          const { error } = await supabaseAdminClient
+            .storage
+            .from('product-images')
+            .upload(fileName, file);
+
+          if (error) {
+            alert('Errore caricamento foto: ' + error.message);
+          } else {
+            await this.fetchStorageImages();
+            const { data: publicUrlData } = supabaseAdminClient
+              .storage
+              .from('product-images')
+              .getPublicUrl(fileName);
+
+            this.productForm.image_url = publicUrlData.publicUrl;
+          }
+        },
+
+        generateSlug(text) {
+          return text
+            .toString()
+            .toLowerCase()
+            .trim()
+            .replace(/[\s\W-]+/g, '-')
+            .replace(/^-+|-+$/g, '');
+        },
+
+        async saveProduct() {
+          const generatedSlug = this.generateSlug(this.productForm.name) + '-' + Date.now().toString().slice(-4);
+
+          const payload = {
+            name: this.productForm.name,
+            slug: this.editingProduct ? (this.productForm.slug || generatedSlug) : generatedSlug,
+            category: this.productForm.category,
+            unit_price: parseFloat(this.productForm.unit_price),
+            is_visible: this.productForm.is_visible,
+            short_description: this.productForm.short_description,
+            long_description: this.productForm.long_description,
+            image_url: this.productForm.image_url
+          };
+
+          let error;
+          if (this.editingProduct) {
+            ({ error } = await supabaseAdminClient
+              .from('products')
+              .update(payload)
+              .eq('id', this.productForm.id));
+          } else {
+            ({ error } = await supabaseAdminClient
+              .from('products')
+              .insert([payload]));
+          }
+
+          if (error) {
+            alert('Errore salvataggio: ' + error.message);
+          } else {
+            this.resetForm();
+            await this.fetchProducts();
+          }
+        },
+
+        async toggleVisibility(product) {
+          const newStatus = !product.is_visible;
+          const { error } = await supabaseAdminClient
+            .from('products')
+            .update({ is_visible: newStatus })
+            .eq('id', product.id);
+
+          if (!error) {
+            product.is_visible = newStatus;
+          } else {
+            alert('Errore aggiornamento visibilità: ' + error.message);
+          }
+        },
+
+        editProduct(product) {
+          this.editingProduct = product;
+          this.productForm = { 
+            ...product,
+            is_visible: product.is_visible !== false
+          };
+        },
+
+        async deleteProduct(id) {
+          if (!confirm('Sei sicuro di voler eliminare questo prodotto? Se è già stato venduto in passato, consigliamo invece di nasconderlo deselezionando la visibilità per preservare lo storico ordini.')) return;
+
+          const { error } = await supabaseAdminClient
+            .from('products')
+            .delete()
+            .eq('id', id);
+
+          if (error) {
+            alert('Impossibile eliminare il prodotto: ' + error.message + '\nTip: Prova a nasconderlo disattivando il flag di visibilità.');
+          } else {
+            await this.fetchProducts();
+          }
+        },
+
+        resetForm() {
+          this.editingProduct = null;
+          this.productForm = {
+            id: null, name: '', slug: '', category: '', unit_price: 0,
+            is_visible: true, short_description: '', long_description: '', image_url: ''
+          };
+        }
+      };
+    }
+
+    document.getElementById('logoutBtn').addEventListener('click', async () => {
+  try {
+    // Chiama il metodo di disconnessione di Supabase
+    await supabaseAdminClient.auth.signOut();
+  } catch (err) {
+    console.error("Errore durante il logout:", err);
+  } finally {
+    // Cancella la sessione e reindirizza all'inizio del login
+    window.location.replace('login.html');
+  }
+});
+  </script>
+</body>
+</html>

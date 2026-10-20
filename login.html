@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login Admin | Dashboard</title>
+
+  <!-- Tailwind CSS & FontAwesome Icons -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <!-- Supabase JS Client -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body class="bg-slate-950 text-slate-100 flex items-center justify-center min-h-screen p-4 font-sans antialiased">
+
+  <!-- CARD LOGIN -->
+  <div class="w-full max-w-md bg-slate-900/80 border border-slate-800 rounded-2xl shadow-2xl backdrop-blur-xl p-8 relative overflow-hidden">
+    
+    <!-- Bagliore decorativo di sfondo -->
+    <div class="absolute -top-16 -right-16 w-32 h-32 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none"></div>
+    <div class="absolute -bottom-16 -left-16 w-32 h-32 bg-purple-500/10 rounded-full blur-2xl pointer-events-none"></div>
+
+    <!-- Header Card -->
+    <div class="text-center mb-8">
+      <div class="inline-flex items-center justify-center w-14 h-14 bg-gradient-to-tr from-indigo-500 to-purple-500 rounded-2xl shadow-lg shadow-indigo-500/25 mb-4">
+        <i class="fa-solid fa-shield-halved text-2xl text-white"></i>
+      </div>
+      <h1 class="text-2xl font-extrabold text-white tracking-tight">Accesso Admin</h1>
+      <p class="text-sm text-slate-400 mt-1">Inserisci le tue credenziali per accedere al pannello</p>
+    </div>
+
+    <!-- Form -->
+    <form id="loginForm" class="space-y-5">
+      <div>
+        <label for="email" class="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5">Email</label>
+        <div class="relative">
+          <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
+            <i class="fa-solid fa-envelope"></i>
+          </div>
+          <input type="email" id="email" required placeholder="admin@esempio.it" 
+            class="w-full pl-10 pr-4 py-2.5 bg-slate-950/60 border border-slate-800 rounded-xl text-white placeholder-slate-500 text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition">
+        </div>
+      </div>
+
+      <div>
+        <label for="password" class="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5">Password</label>
+        <div class="relative">
+          <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
+            <i class="fa-solid fa-lock"></i>
+          </div>
+          <input type="password" id="password" required placeholder="••••••••" 
+            class="w-full pl-10 pr-4 py-2.5 bg-slate-950/60 border border-slate-800 rounded-xl text-white placeholder-slate-500 text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition">
+        </div>
+      </div>
+
+      <!-- Pulsante di Login con stato di caricamento -->
+      <button type="submit" id="submitBtn" 
+        class="w-full py-3 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white font-semibold rounded-xl text-sm transition shadow-lg shadow-indigo-600/25 flex items-center justify-center gap-2 active:scale-[0.98]">
+        <span id="btnText">Accedi alla Dashboard</span>
+        <i id="btnIcon" class="fa-solid fa-arrow-right text-xs"></i>
+      </button>
+
+      <!-- Box Messaggio di Errore -->
+      <div id="errorMsg" class="hidden p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs flex items-center gap-2.5">
+        <i class="fa-solid fa-circle-exclamation text-sm shrink-0"></i>
+        <span id="errorText"></span>
+      </div>
+    </form>
+
+    <!-- Footer decorativo -->
+    <div class="mt-8 pt-4 border-t border-slate-800/80 text-center text-xs text-slate-500">
+      <p>Sistema protetto da crittografia end-to-end</p>
+    </div>
+  </div>
+
+  <!-- SCRIPT SUPABASE -->
+  <script>
+    const SUPABASE_URL = "https://jjtchtdqeyigqthckwrk.supabase.co";
+    const SUPABASE_ANON_KEY = "sb_publishable_LHu-ACylxwJ58UhGyuFpOA_GCBcw4Ri";
+
+    // Inizializzazione del client Supabase
+    const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    // Controlla se l'utente è già loggato all'apertura della pagina
+    async function checkExistingSession() {
+      const { data: { session } } = await supabaseClient.auth.getSession();
+      if (session) {
+        window.location.replace('admin.html');
+      }
+    }
+    checkExistingSession();
+
+    // Gestione dell'invio del modulo
+    document.getElementById('loginForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+
+      const emailInput = document.getElementById('email').value.trim();
+      const passwordInput = document.getElementById('password').value;
+      const errorMsg = document.getElementById('errorMsg');
+      const errorText = document.getElementById('errorText');
+      const submitBtn = document.getElementById('submitBtn');
+      const btnText = document.getElementById('btnText');
+      const btnIcon = document.getElementById('btnIcon');
+
+      // Reset stato errore
+      errorMsg.classList.add('hidden');
+      errorText.textContent = "";
+
+      // Stato caricamento sul pulsante
+      submitBtn.disabled = true;
+      btnText.textContent = "Verifica in corso...";
+      btnIcon.className = "fa-solid fa-circle-notch animate-spin text-xs";
+
+      try {
+        const { data, error } = await supabaseClient.auth.signInWithPassword({
+          email: emailInput,
+          password: passwordInput
+        });
+
+        if (error) {
+          errorText.textContent = "Credenziali non valide: " + error.message;
+          errorMsg.classList.remove('hidden');
+
+          // Ripristina il pulsante
+          submitBtn.disabled = false;
+          btnText.textContent = "Accedi alla Dashboard";
+          btnIcon.className = "fa-solid fa-arrow-right text-xs";
+        } else {
+          btnText.textContent = "Accesso riuscito!";
+          btnIcon.className = "fa-solid fa-check text-xs";
+          
+          setTimeout(() => {
+            window.location.replace('admin.html');
+          }, 400);
+        }
+      } catch (err) {
+        console.error("Errore di connessione:", err);
+        errorText.textContent = "Errore di connessione con il server.";
+        errorMsg.classList.remove('hidden');
+
+        submitBtn.disabled = false;
+        btnText.textContent = "Accedi alla Dashboard";
+        btnIcon.className = "fa-solid fa-arrow-right text-xs";
+      }
+    });
+  </script>
+</body>
+</html>
