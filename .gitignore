@@ -1,2 +1,5 @@
-database_schema_and_seed_data.sql
+.gitignore
 chiavi.txt
+edgecheck.txt
+edgestripe.txt
+adminbackup.html
